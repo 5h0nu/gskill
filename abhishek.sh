@@ -2,24 +2,27 @@
 set -e
 
 # =====================================================
-# GSP367 – Document AI + Cloud Functions (EU version)
-# Document AI: us (MANDATORY for Qwiklabs)
-# Cloud Functions & Buckets: europe-west1
+# Automate Data Capture at Scale with Document AI
+# GSP367 | Qwiklabs Compatible
 # =====================================================
 
 REGION="europe-west1"
 PROCESSOR_NAME="finance-processor"
 
-echo "REGION: $REGION"
-echo "PROCESSOR: $PROCESSOR_NAME"
+echo "======================================"
+echo " REGION        : $REGION"
+echo " PROCESSOR     : $PROCESSOR_NAME"
+echo "======================================"
 
 PROJECT_ID=$(gcloud config get-value project)
 PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
 
-echo "PROJECT_ID: $PROJECT_ID"
-echo "PROJECT_NUMBER: $PROJECT_NUMBER"
+echo " PROJECT ID    : $PROJECT_ID"
+echo " PROJECT NUM   : $PROJECT_NUMBER"
+echo "======================================"
 
-# ---------------- ENABLE APIS ----------------
+# ---------------- ENABLE REQUIRED APIS ----------------
+echo "Enabling APIs..."
 gcloud services enable \
   documentai.googleapis.com \
   cloudfunctions.googleapis.com \
@@ -31,10 +34,12 @@ gcloud services enable \
 sleep 20
 
 # ---------------- COPY LAB FILES ----------------
+echo "Copying lab files..."
 mkdir -p ~/document-ai-challenge
 gsutil -m cp -r gs://spls/gsp367/* ~/document-ai-challenge/
 
 # ---------------- CREATE DOCUMENT AI PROCESSOR (US) ----------------
+echo "Creating Document AI processor (US)..."
 ACCESS_TOKEN=$(gcloud auth application-default print-access-token)
 
 curl -s -X POST \
@@ -49,19 +54,22 @@ curl -s -X POST \
 sleep 10
 
 # ---------------- GET PROCESSOR ID ----------------
+echo "Fetching Processor ID..."
 PROCESSOR_ID=$(curl -s -X GET \
   -H "Authorization: Bearer $(gcloud auth application-default print-access-token)" \
   "https://documentai.googleapis.com/v1/projects/$PROJECT_ID/locations/us/processors" | \
   grep '"name":' | sed -E 's/.*processors\/([^"]+)".*/\1/' | head -n 1)
 
-echo "PROCESSOR_ID: $PROCESSOR_ID"
+echo "PROCESSOR_ID  : $PROCESSOR_ID"
 
-# ---------------- CREATE BUCKETS (EU) ----------------
+# ---------------- CREATE CLOUD STORAGE BUCKETS ----------------
+echo "Creating Cloud Storage buckets..."
 gsutil mb -c standard -l $REGION gs://${PROJECT_ID}-input-invoices || true
 gsutil mb -c standard -l $REGION gs://${PROJECT_ID}-output-invoices || true
 gsutil mb -c standard -l $REGION gs://${PROJECT_ID}-archived-invoices || true
 
-# ---------------- BIGQUERY ----------------
+# ---------------- BIGQUERY SETUP ----------------
+echo "Setting up BigQuery..."
 bq --location=EU mk -d \
   --description "Form Parser Results" \
   ${PROJECT_ID}:invoice_parser_results || true
@@ -72,7 +80,8 @@ bq mk --table \
   invoice_parser_results.doc_ai_extracted_entities \
   doc_ai_extracted_entities.json || true
 
-# ---------------- IAM ----------------
+# ---------------- IAM PERMISSIONS ----------------
+echo "Setting IAM permissions..."
 SERVICE_ACCOUNT=$(gcloud storage service-agent --project=$PROJECT_ID)
 
 gcloud projects add-iam-policy-binding $PROJECT_ID \
@@ -81,7 +90,8 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
 
 sleep 20
 
-# ---------------- DEPLOY CLOUD FUNCTION (EU) ----------------
+# ---------------- DEPLOY CLOUD FUNCTION ----------------
+echo "Deploying Cloud Function..."
 cd ~/document-ai-challenge/scripts
 
 gcloud functions deploy process-invoices \
@@ -95,9 +105,12 @@ gcloud functions deploy process-invoices \
   --service-account=${PROJECT_ID}@appspot.gserviceaccount.com \
   --update-env-vars=PROCESSOR_ID=${PROCESSOR_ID},PARSER_LOCATION=us,PROJECT_ID=${PROJECT_ID}
 
-# ---------------- UPLOAD SAMPLE FILES ----------------
+# ---------------- UPLOAD SAMPLE INVOICES ----------------
+echo "Uploading sample invoices..."
 gsutil -m cp -r \
   gs://cloud-training/gsp367/invoices/* \
   gs://${PROJECT_ID}-input-invoices/
 
-echo "✅ GSP367 SETUP COMPLETED SUCCESSFULLY"
+echo "======================================"
+echo " ✅ LAB SETUP COMPLETED SUCCESSFULLY"
+echo "======================================"
