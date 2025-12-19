@@ -6,7 +6,7 @@ set -e
 # GSP367 | Qwiklabs Compatible
 # =====================================================
 
-REGION="us"
+REGION="us-central1"
 PROCESSOR_NAME="finance-processor"
 
 echo "======================================"
